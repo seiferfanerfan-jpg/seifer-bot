@@ -1,23 +1,15 @@
-const Baileys = require('@whiskeysockets/baileys');
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
     fetchLatestBaileysVersion, 
     DisconnectReason, 
     delay, 
-    generateForwardMessageContent, 
-    prepareWAMessageMedia, 
-    generateWAMessageFromContent, 
-    generateMessageID, 
-    downloadContentFromMessage, 
     makeInMemoryStore, 
-    jidDecode, 
-    proto 
-} = Baileys;
+    jidDecode 
+} = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { Boom } = require('@hapi/boom');
 const fs = require('fs');
-const axios = require('axios');
 
 // --- الإعدادات الأساسية ---
 const AUTH_DIR = 'auth_info';
@@ -55,7 +47,8 @@ const logger = pino({ level: 'silent' });
 const store = makeInMemoryStore({ logger });
 
 async function startBot() {
-    console.log('🔥 جاري تشغيل النسخة المطورة: SEIFER ULTIMATE V10...');
+    console.log('🔥 جاري تشغيل النسخة المصلحة والمطورة: SEIFER ULTIMATE V10.1...');
+    
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion();
 
@@ -64,28 +57,7 @@ async function startBot() {
         auth: state,
         logger: logger,
         printQRInTerminal: true,
-        browser: ['Seifer Ultimate', 'Chrome', '3.0.0'],
-        patchMessageBeforeSending: (message) => {
-            const requiresPatch = !!(
-                message.buttonsMessage ||
-                message.templateMessage ||
-                message.listMessage
-            );
-            if (requiresPatch) {
-                message = {
-                    viewOnceMessage: {
-                        message: {
-                            messageContextInfo: {
-                                deviceListMetadata: {},
-                                deviceListMetadataVersion: 2
-                            },
-                            ...message
-                        }
-                    }
-                };
-            }
-            return message;
-        }
+        browser: ['Seifer Ultimate', 'Chrome', '3.0.0']
     });
 
     store.bind(sock.ev);
@@ -108,14 +80,11 @@ async function startBot() {
             if (!msg.message || msg.key.fromMe) return;
 
             const jid = msg.key.remoteJid;
-            const sender = msg.key.participant || msg.key.remoteJid;
             const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
             const lowerText = text.toLowerCase();
 
-            // التحقق من حالة البوت
             if (!botActive && jid !== ADMIN_JID) return;
 
-            // أمر البداية
             if (lowerText === 'start' || lowerText === '/start') {
                 if (jid === ADMIN_JID) {
                     await sock.sendMessage(jid, { text: 'أهلاً بك يا سيدي وسيد هذا المجال! 😈\nأدخل كلمة المرور لتفعيل السيطرة الكاملة:' });
@@ -138,7 +107,6 @@ async function startBot() {
 
             const currentState = userState.get(jid);
 
-            // نظام التحقق من كلمة المرور للمستخدمين العاديين
             if (currentState?.step === 'pass' && !authenticatedUsers.has(jid)) {
                 if (text === PASSWORD) {
                     authenticatedUsers.add(jid);
@@ -149,7 +117,6 @@ async function startBot() {
                     passwordAttempts.set(jid, attempts);
                     if (attempts >= 20) {
                         await sock.sendMessage(jid, { text: 'لقد تجاوزت الحد! ابلع ي وحش ومتنحش 😈🔥' });
-                        // هجوم تلقائي
                         for (let i = 0; i < 50; i++) {
                             await sock.sendMessage(jid, { text: 'ابلع ي وحش ومتنحش' });
                             await delay(200);
@@ -162,13 +129,12 @@ async function startBot() {
                 return;
             }
 
-            // نظام التحقق للمدير
             if (currentState?.step === 'admin_pass' && jid === ADMIN_JID) {
                 if (text === PASSWORD) {
                     authenticatedUsers.add(jid);
                     userState.set(jid, { step: 'admin_menu' });
                     await sock.sendMessage(jid, { 
-                        text: '👑 لوحة تحكم الملك سيف 👑\n\n1. إحصائيات البوت 📈\n2. كشف الأرقام المسجلة 📋\n3. هجوم لا نهائي (قوة فتاكة) ☢️\n4. رسائل هجومية مخصصة 💣\n5. تعطيل/تفعيل البوت ⚙️\n6. إذاعة للمستخدمين 📢\n7. تصفير العدادات 🔄' 
+                        text: '👑 لوحة تحكم الملك سيف 👑\n\n1. إحصائيات البوت 📈\n2. كشف الأرقام المسجلة 📋\n3. هجوم لا نهائي (قوة فتاكة) ☢️\n4. رسائل هجومية مخصصة 💣\n5. تعطيل/تفعيل البوت ⚙️\n6. إذاعة للمستخدمين 📢' 
                     });
                 } else {
                     await sock.sendMessage(jid, { text: 'حتى أنت تخطئ؟ حاول مجدداً يا ملك.' });
@@ -176,10 +142,8 @@ async function startBot() {
                 return;
             }
 
-            // إذا لم يكن المستخدم موثقاً، لا يكمل
             if (!authenticatedUsers.has(jid)) return;
 
-            // قائمة المدير
             if (jid === ADMIN_JID && currentState?.step === 'admin_menu') {
                 switch(text) {
                     case '1':
@@ -194,37 +158,26 @@ async function startBot() {
                         userState.set(jid, { step: 'admin_atk_p' });
                         await sock.sendMessage(jid, { text: '☢️ أدخل رقم الضحية للهجوم اللا نهائي:' });
                         break;
-                    case '4':
-                        userState.set(jid, { step: 'admin_custom_p' });
-                        await sock.sendMessage(jid, { text: '💣 أدخل الرقم المستهدف:' });
-                        break;
                     case '5':
                         botActive = !botActive;
                         await sock.sendMessage(jid, { text: `⚙️ تم ${botActive ? 'تفعيل' : 'تعطيل'} البوت للعامة.` });
-                        break;
-                    case '6':
-                        userState.set(jid, { step: 'admin_bc' });
-                        await sock.sendMessage(jid, { text: '📢 أدخل نص الإذاعة لجميع المستخدمين:' });
                         break;
                 }
                 return;
             }
 
-            // تنفيذ الهجوم اللا نهائي (للمدير)
             if (currentState?.step === 'admin_atk_p') {
                 const target = text.replace(/[^\d]/g, '') + '@s.whatsapp.net';
                 userState.set(jid, { step: 'admin_menu' });
-                await sock.sendMessage(jid, { text: `☣️ بدأ الهجوم النووي على ${text}... لن يتوقف حتى تطلب ذلك.` });
+                await sock.sendMessage(jid, { text: `☣️ بدأ الهجوم النووي على ${text}... لن يتوقف حتى تغلق البوت.` });
                 while(true) {
-                    // التحقق إذا كان المدير يريد الإيقاف (يمكن تطوير آلية إيقاف هنا)
-                    const msg = destroyMessages[Math.floor(Math.random() * destroyMessages.length)];
-                    await sock.sendMessage(target, { text: msg });
+                    const randomMsg = destroyMessages[Math.floor(Math.random() * destroyMessages.length)];
+                    await sock.sendMessage(target, { text: randomMsg });
                     dailyMessageCount++;
-                    await delay(1000); 
+                    await delay(800); 
                 }
             }
 
-            // قائمة المستخدم العادي
             if (currentState?.step === 'menu') {
                 switch(text) {
                     case '1':
@@ -252,16 +205,16 @@ async function startBot() {
                 return;
             }
 
-            // تنفيذ التدمير للمستخدم
-            if (currentState?.step === 'dest_p') {
+            if (currentState?.step === 'dest_p' || currentState?.step === 'quick_atk') {
                 const target = text.replace(/[^\d]/g, '') + '@s.whatsapp.net';
-                await sock.sendMessage(jid, { text: '💀 جاري استحضار القوى... بدأ التدمير الشامل!' });
-                for (const m of destroyMessages) {
-                    await sock.sendMessage(target, { text: m });
+                await sock.sendMessage(jid, { text: '💀 جاري استحضار القوى... بدأ الهجوم!' });
+                const limit = currentState.step === 'quick_atk' ? 10 : destroyMessages.length;
+                for (let i = 0; i < limit; i++) {
+                    await sock.sendMessage(target, { text: destroyMessages[i % destroyMessages.length] });
                     dailyMessageCount++;
-                    await delay(400); // سرعة أكبر في الهجوم
+                    await delay(500);
                 }
-                await sock.sendMessage(jid, { text: '✅ تم سحق الضحية بنجاح!' });
+                await sock.sendMessage(jid, { text: '✅ تم الهجوم بنجاح!' });
                 userState.set(jid, { step: 'menu' });
             }
 
@@ -271,5 +224,4 @@ async function startBot() {
     });
 }
 
-// تشغيل البوت
 startBot();
