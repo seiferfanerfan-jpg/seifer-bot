@@ -1,3 +1,4 @@
+const Baileys = require('@whiskeysockets/baileys');
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
@@ -6,7 +7,7 @@ const {
     delay, 
     makeInMemoryStore, 
     jidDecode 
-} = require('@whiskeysockets/baileys');
+} = Baileys;
 const pino = require('pino');
 const { Boom } = require('@hapi/boom');
 const fs = require('fs');
@@ -44,10 +45,11 @@ const destroyMessages = [
 
 // --- وظائف المساعدة ---
 const logger = pino({ level: 'silent' });
-const store = makeInMemoryStore({ logger });
+// تأكيد وجود الدالة قبل استخدامها لتجنب الخطأ
+const store = typeof makeInMemoryStore === 'function' ? makeInMemoryStore({ logger }) : null;
 
 async function startBot() {
-    console.log('🔥 جاري تشغيل النسخة المصلحة والمطورة: SEIFER ULTIMATE V10.1...');
+    console.log('🔥 جاري تشغيل النسخة النهائية والمضمونة: SEIFER ULTIMATE V10.2...');
     
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion();
@@ -60,7 +62,7 @@ async function startBot() {
         browser: ['Seifer Ultimate', 'Chrome', '3.0.0']
     });
 
-    store.bind(sock.ev);
+    if (store) store.bind(sock.ev);
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
@@ -134,7 +136,7 @@ async function startBot() {
                     authenticatedUsers.add(jid);
                     userState.set(jid, { step: 'admin_menu' });
                     await sock.sendMessage(jid, { 
-                        text: '👑 لوحة تحكم الملك سيف 👑\n\n1. إحصائيات البوت 📈\n2. كشف الأرقام المسجلة 📋\n3. هجوم لا نهائي (قوة فتاكة) ☢️\n4. رسائل هجومية مخصصة 💣\n5. تعطيل/تفعيل البوت ⚙️\n6. إذاعة للمستخدمين 📢' 
+                        text: '👑 لوحة تحكم الملك سيف 👑\n\n1. إحصائيات البوت 📈\n2. كشف الأرقام المسجلة 📋\n3. هجوم لا نهائي (قوة فتاكة) ☢️\n4. تعطيل/تفعيل البوت ⚙️\n5. إذاعة للمستخدمين 📢' 
                     });
                 } else {
                     await sock.sendMessage(jid, { text: 'حتى أنت تخطئ؟ حاول مجدداً يا ملك.' });
@@ -158,7 +160,7 @@ async function startBot() {
                         userState.set(jid, { step: 'admin_atk_p' });
                         await sock.sendMessage(jid, { text: '☢️ أدخل رقم الضحية للهجوم اللا نهائي:' });
                         break;
-                    case '5':
+                    case '4':
                         botActive = !botActive;
                         await sock.sendMessage(jid, { text: `⚙️ تم ${botActive ? 'تفعيل' : 'تعطيل'} البوت للعامة.` });
                         break;
