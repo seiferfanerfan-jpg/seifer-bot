@@ -1,4 +1,3 @@
-const Baileys = require('@whiskeysockets/baileys');
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
@@ -6,11 +5,13 @@ const {
     DisconnectReason, 
     delay, 
     makeInMemoryStore, 
-    jidDecode 
-} = Baileys;
+    jidDecode,
+    getContentType
+} = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { Boom } = require('@hapi/boom');
 const fs = require('fs');
+const qrcode = require('qrcode-terminal');
 
 // --- الإعدادات الأساسية ---
 const AUTH_DIR = 'auth_info';
@@ -45,30 +46,38 @@ const destroyMessages = [
 
 // --- وظائف المساعدة ---
 const logger = pino({ level: 'silent' });
-// تأكيد وجود الدالة قبل استخدامها لتجنب الخطأ
-const store = typeof makeInMemoryStore === 'function' ? makeInMemoryStore({ logger }) : null;
+const store = makeInMemoryStore({ logger });
 
 async function startBot() {
-    console.log('🔥 جاري تشغيل النسخة النهائية والمضمونة: SEIFER ULTIMATE V10.2...');
+    console.log('🔥 جاري تشغيل النسخة الاحترافية المحدثة: SEIFER ULTIMATE V10.3...');
     
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-    const { version } = await fetchLatestBaileysVersion();
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    console.log(`📡 استخدام إصدار Baileys: ${version.join('.')} (الأحدث: ${isLatest})`);
 
     const sock = makeWASocket({
         version,
         auth: state,
         logger: logger,
         printQRInTerminal: true,
-        browser: ['Seifer Ultimate', 'Chrome', '3.0.0']
+        browser: ['Seifer Ultimate', 'Chrome', '3.0.0'],
+        generateHighQualityLinkPreview: true
     });
 
-    if (store) store.bind(sock.ev);
+    store.bind(sock.ev);
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+        
+        if (qr) {
+            console.log('📷 قم بمسح رمز QR أدناه للربط:');
+            qrcode.generate(qr, { small: true });
+        }
+
         if (connection === 'open') {
             console.log('✅ تم الاتصال بنجاح! البوت الآن فتاك وجاهز للعمل.');
+            sock.sendMessage(ADMIN_JID, { text: '👑 تم تشغيل البوت بنجاح يا ملك سيف! البوت الآن تحت سيطرتك.' });
         } else if (connection === 'close') {
             let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
             console.log(`❌ انقطع الاتصال، السبب: ${reason}. جاري إعادة التشغيل...`);
@@ -82,7 +91,8 @@ async function startBot() {
             if (!msg.message || msg.key.fromMe) return;
 
             const jid = msg.key.remoteJid;
-            const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
+            const mtype = getContentType(msg.message);
+            const text = (mtype === 'conversation' ? msg.message.conversation : mtype === 'extendedTextMessage' ? msg.message.extendedTextMessage.text : '').trim();
             const lowerText = text.toLowerCase();
 
             if (!botActive && jid !== ADMIN_JID) return;
